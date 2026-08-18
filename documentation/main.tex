@@ -1,0 +1,61 @@
+\documentclass[a4paper, 10pt]{article}
+\include{macros}
+
+\setlength{\parindent}{0pt}
+\geometry{margin=1in}
+
+\title{Documentation for BigQuery Fintech Dataset}
+\author{Gabriel Chew}
+\date{\today}
+
+\begin{document} 
+\maketitle
+\section{Preliminary Analysis of the Dataset}
+For this project, we make use of the BigQuery Fintech Dataset that is publicly available at  \href{https://www.kaggle.com/datasets/mustafakeser4/bigquery-fintech-dataset/data?select=loan.csv}{https://www.kaggle.com/datasets/mustafakeser4/bigquery-fintech-dataset/data?select=loan.csv}. We first analyse the \texttt{loans.csv} dataset. 
+
+\subsection{\texttt{loans.csv} Dataset}
+The dataset consists of 270299 rows and 18 columns occupying space of 172MB. A following is the list of the columns together with their datatypes:
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{c|c}
+        \textbf{Column} & \textbf{dtype} \\
+         \hline
+        \texttt{loan\_id} & \texttt{int64} \\
+        \texttt{customer\_id} & \texttt{str} \\
+        \texttt{loan\_status} & \texttt{str} \\
+        \texttt{loan\_amount} & \texttt{float64} \\
+        \texttt{state} & \texttt{str} \\
+        \texttt{funded\_amount} & \texttt{float64} \\
+        \texttt{term} & \texttt{str} \\
+        \texttt{int\_rate} & \texttt{float64} \\
+        \texttt{installment} & \texttt{float64} \\
+        \texttt{grade} & \texttt{str} \\
+        \texttt{issue\_d} & \texttt{datetime64[us]}$^\dagger$ \\
+        \texttt{issue\_date} & \texttt{datetime64[us]}$^\dagger$ \\
+        \texttt{issue\_year} & \texttt{float64} \\
+        \texttt{pymnt\_plan} & \texttt{bool} \\
+        \texttt{type} & \texttt{str} \\
+        \texttt{purpose} & \texttt{str} \\
+        \texttt{description} & \texttt{str} \\
+        \texttt{notes} & \texttt{str} \\
+        \hline
+    \end{tabular}
+    \caption{Column analysis of \texttt{loans.csv}. Dtypes are those inferred by
+    \texttt{pandas.read\_csv} (pandas 3.0.3, in which text columns take the
+    dedicated \texttt{str} dtype). $^\dagger$\texttt{issue\_d} and
+    \texttt{issue\_date} are stored as text (\texttt{Jun-13} and \texttt{June
+    2013} respectively) and are read as \texttt{str}; the dtype shown is the
+    result of parsing them with \texttt{pandas.to\_datetime}.}
+\end{table}
+
+The dataframe was free of missing values including placeholders for all columns except \texttt{description}. Upon inspection of the columns, it is noted that the following pairs of columns are duplicated:
+\texttt{loan\_amount, founded\_amount} for the principal amount, \texttt{issue\_date, issue\_d} for the date of issue, \texttt{purpose, description} for the purpose of loan. Furthermore, the \texttt{pymnt\_plan} nearly constant and consisting of $99.99\%$ of \texttt{False} variables. 
+
+There were also type issues noted in the \texttt{type} column, entries like `individual' and `INDIVIDUAL' counted as unique entries in pandas and were subsequently merged into single entries. 
+
+To handle all the data quality issues identified, a new dataset called `loan\_cleaned.csv' was created by dropping the duplicate columns $(\texttt{funded\_amount}, \texttt{issue\_d}, \texttt{description})$, the non-varying columns (\texttt{notes}, \texttt{pymnt\_plan}) and the identifier columns (\texttt{loan\_id, customer\_id}).\footnote{This step will be reversed in the future to allow for joining with the other dataset \texttt{customer.csv}.}, and fixing the entry inconsistencies seen in the \texttt{type} column. 
+
+
+
+\end{document}
