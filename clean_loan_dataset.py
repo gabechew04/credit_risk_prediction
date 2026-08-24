@@ -26,11 +26,13 @@ Requires the `data_science` conda environment (pandas 3.0.3, numpy 2.5.1):
 Without activating, call the environment's interpreter directly:
 
     ~/anaconda3/envs/data_science/python.exe credit_risk/clean_loan_dataset.py
+
+To point at a different source file or a row-capped sample, edit
+SOURCE_PATH / OUTPUT_PATH / SAMPLE below.
 """
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 import pandas as pd
@@ -41,11 +43,12 @@ DATA_DIR = Path(__file__).resolve().parent / "datasets"
 SOURCE_PATH = DATA_DIR / "loan.csv"
 OUTPUT_PATH = DATA_DIR / "loan_cleaned.csv"
 RECODED_OUTPUT_PATH = DATA_DIR / "loan_status_recoded.csv"
+SAMPLE = None  # int to read only the first N rows, None for the full file
 
 # Column -> reason it is dropped.
 DROP_COLUMNS = {
     "loan_id": "identifier (row index 1..N, no predictive content)",
-    "customer_id": "identifier (hashed bytes, unique per row)",
+#    "customer_id": "identifier (hashed bytes, unique per row)",
     "funded_amount": "duplicate of loan_amount (identical on every row)",
     "description": "duplicate of purpose (free-text restatement, 5,631 dirty levels)",
     "issue_date": "duplicate of issue_d (same date, verbose format)",
@@ -114,14 +117,8 @@ def recode_loan_status(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, default=SOURCE_PATH)
-    parser.add_argument("--output", type=Path, default=OUTPUT_PATH)
-    parser.add_argument("--sample", type=int, default=None, help="read only the first N rows")
-    args = parser.parse_args()
-
-    print(f"Reading {args.source} ...")
-    df = pd.read_csv(args.source, nrows=args.sample, low_memory=False)
+    print(f"Reading {SOURCE_PATH} ...")
+    df = pd.read_csv(SOURCE_PATH, nrows=SAMPLE, low_memory=False)
     print(f"  source: {df.shape[0]:,} rows x {df.shape[1]} columns")
 
     before_type = df["type"].value_counts() if "type" in df.columns else None
@@ -151,31 +148,24 @@ def main() -> None:
     for col in untouched:
         assert cleaned[col].equals(df[col]), f"{col} was modified unexpectedly"
 
-    cleaned.to_csv(args.output, index=False)
-    size_mb = args.output.stat().st_size / 1024**2
-    print(f"\nWrote {args.output}  ({size_mb:.1f} MB)")
+    cleaned.to_csv(OUTPUT_PATH, index=False)
+    size_mb = OUTPUT_PATH.stat().st_size / 1024**2
+    print(f"\nWrote {OUTPUT_PATH}  ({size_mb:.1f} MB)")
 
     # --- loan_status recode: binary Fully Paid vs Missed Payment outcome ---
-    print("\n`loan_status` before recode:")
-    print(cleaned["loan_status"].value_counts().to_string())
+    # print("\n`loan_status` before recode:")
+    # print(cleaned["loan_status"].value_counts().to_string())
 
-    recoded = recode_loan_status(cleaned)
+    # #recoded = recode_loan_status(cleaned)
 
-    print("\n`loan_status` after recode (Current/In Grace Period dropped):")
-    print(recoded["loan_status"].value_counts().to_string())
-    print(f"  rows: {len(cleaned):,} -> {len(recoded):,} ({len(cleaned) - len(recoded):,} dropped)")
+    # print("\n`loan_status` after recode (Current/In Grace Period dropped):")
+    # print(recoded["loan_status"].value_counts().to_string())
+    # print(f"  rows: {len(cleaned):,} -> {len(recoded):,} ({len(cleaned) - len(recoded):,} dropped)")
 
-    recoded.to_csv(RECODED_OUTPUT_PATH, index=False)
-    size_mb = RECODED_OUTPUT_PATH.stat().st_size / 1024**2
-    print(f"\nWrote {RECODED_OUTPUT_PATH}  ({size_mb:.1f} MB)")
+    # recoded.to_csv(RECODED_OUTPUT_PATH, index=False)
+    # size_mb = RECODED_OUTPUT_PATH.stat().st_size / 1024**2
+    # print(f"\nWrote {RECODED_OUTPUT_PATH}  ({size_mb:.1f} MB)")
 
-    FIG_DIR.mkdir(parents=True, exist_ok=True)
-    bar_path = FIG_DIR / "loan_status_recoded_bar_chart.png"
-    pie_path = FIG_DIR / "loan_status_recoded_pie_chart.png"
-    bar_chart(recoded, recoded["loan_status"], save_path=bar_path)
-    pie_chart(recoded, recoded["loan_status"], save_path=pie_path)
-    print(f"Wrote {bar_path}")
-    print(f"Wrote {pie_path}")
 
 
 if __name__ == "__main__":

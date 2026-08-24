@@ -11,25 +11,26 @@ Requires the `data_science` conda environment (pandas 3.0.3, numpy 2.5.1):
 
     conda activate data_science
     python credit_risk/loan_column_analysis.py
-    python credit_risk/loan_column_analysis.py --sample 200000   # faster pass
 
 Without activating, call the environment's interpreter directly:
 
     ~/anaconda3/envs/data_science/python.exe credit_risk/loan_column_analysis.py
+
+To analyse a different file or a row-capped sample, edit DATA_PATH / SAMPLE below.
 """
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-DATA_PATH = Path(__file__).resolve().parent / "datasets" / "loan.csv"
+DATA_PATH = Path(__file__).resolve().parent / "datasets" / "master.csv"
+SAMPLE = None  # int to read only the first N rows, None for the full file
 
-# Strings that mean "no value" but are not read as NaN by default.
-NULL_TOKENS = {"", "na", "n/a", "nan", "null", "none", "-", "?", "unknown", "missing"}
+# # Strings that mean "no value" but are not read as NaN by default.
+# NULL_TOKENS = {"", "na", "n/a", "nan", "null", "none", "-", "?", "unknown", "missing"}
 
 # A column with few distinct values relative to its length is treated as
 # categorical even when stored as text or as an integer-valued float.
@@ -50,14 +51,14 @@ def load(path: Path, sample: int | None) -> pd.DataFrame:
     return df
 
 
-def normalise_missing(df: pd.DataFrame) -> pd.DataFrame:
-    """Turn placeholder strings ('', ' ', 'N/A', ...) into real NaNs."""
-    out = df.copy()
-    for col in out.columns:
-        if out[col].dtype == object:
-            stripped = out[col].astype("string").str.strip()
-            out[col] = stripped.mask(stripped.str.lower().isin(NULL_TOKENS))
-    return out
+# def normalise_missing(df: pd.DataFrame) -> pd.DataFrame:
+#     """Turn placeholder strings ('', ' ', 'N/A', ...) into real NaNs."""
+#     out = df.copy()
+#     for col in out.columns:
+#         if out[col].dtype == object:
+#             stripped = out[col].astype("string").str.strip()
+#             out[col] = stripped.mask(stripped.str.lower().isin(NULL_TOKENS))
+#     return out
 
 
 def infer_semantic_type(s: pd.Series) -> str:
@@ -133,12 +134,39 @@ def missing_table(raw: pd.DataFrame, clean: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("column").sort_values("pct_missing", ascending=False)
 
 
+def summarise_numerical_column(s: pd.Series) -> None:
+    """Print describe() plus skew/kurtosis for a numerical column."""
+    non_null = s.dropna()
+    desc = non_null.describe(percentiles=[0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
+    print(desc.to_string())
+    print(f"  skew={non_null.skew():.3f}  kurtosis={non_null.kurtosis():.3f}  "
+          f"zeros={int((non_null == 0).sum())}  negatives={int((non_null < 0).sum())}")
+
+
+def summarise_categorical_column(s: pd.Series) -> None:
+    """Print value counts and top categories for a categorical column, keeping NaN as its own category."""
+    counts = s.value_counts(dropna=False)
+    print(f"  n_unique={counts.size}")
+    print("  top values:")
+    top = counts.head(15)
+    pct = (100 * top / len(s)).round(2)
+    print(pd.DataFrame({"count": top, "pct_of_rows": pct}).to_string())
+    if counts.size > 15:
+        print(f"  ... {counts.size - 15} further categories")
+
+
+def summarise_datetime_column(s: pd.Series) -> None:
+    """Print describe() and a by-year breakdown for a datetime column."""
+    non_null = s.dropna()
+    print(non_null.describe().to_string())
+    print("  by year:")
+    print(non_null.dt.year.value_counts().sort_index().to_string())
+
+
 def summarise_column(s: pd.Series, name: str) -> None:
-    """Section 3: a pandas summary appropriate to the column's type."""
+    """Section 3: dispatch to the summary appropriate to the column's type."""
     kind = infer_semantic_type(s)
-    n_missing = int(s.isna().sum())
-    print(f"\n--- {name}  [dtype={s.dtype}, inferred={kind}, "
-          f"missing={n_missing} ({100 * n_missing / len(s):.2f}%)] ---")
+    print(f"\n--- {name}  [dtype={s.dtype}, inferred={kind}] ---")
 
     non_null = s.dropna()
     if non_null.empty:
@@ -146,34 +174,17 @@ def summarise_column(s: pd.Series, name: str) -> None:
         return
 
     if pd.api.types.is_numeric_dtype(s) and kind not in {"binary", "categorical (integer-coded)"}:
-        desc = non_null.describe(percentiles=[0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99])
-        print(desc.to_string())
-        print(f"  skew={non_null.skew():.3f}  kurtosis={non_null.kurtosis():.3f}  "
-              f"zeros={int((non_null == 0).sum())}  negatives={int((non_null < 0).sum())}")
+        summarise_numerical_column(s)
     elif pd.api.types.is_datetime64_any_dtype(s):
-        print(non_null.describe().to_string())
-        print("  by year:")
-        print(non_null.dt.year.value_counts().sort_index().to_string())
+        summarise_datetime_column(s)
     else:
-        counts = non_null.value_counts()
-        print(f"  n_unique={counts.size}")
-        print("  top values:")
-        top = counts.head(15)
-        pct = (100 * top / len(s)).round(2)
-        print(pd.DataFrame({"count": top, "pct_of_rows": pct}).to_string())
-        if counts.size > 15:
-            print(f"  ... {counts.size - 15} further categories")
+        summarise_categorical_column(s)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--path", type=Path, default=DATA_PATH, help="path to loan.csv")
-    parser.add_argument("--sample", type=int, default=None, help="read only the first N rows")
-    args = parser.parse_args()
-
-    print(f"Loading {args.path} ...")
-    raw = load(args.path, args.sample)
-    df = normalise_missing(raw)
+    print(f"Loading {DATA_PATH} ...")
+    raw = load(DATA_PATH, SAMPLE)
+    df = raw
     print(f"Shape: {df.shape[0]:,} rows x {df.shape[1]} columns")
     print(f"Memory: {df.memory_usage(deep=True).sum() / 1024**2:.1f} MB")
     print(f"Fully duplicated rows: {int(df.duplicated().sum()):,}")
@@ -197,8 +208,25 @@ def main() -> None:
     print("\n" + "=" * 100)
     print("3. PER-COLUMN SUMMARY")
     print("=" * 100)
+    numerical_cols, datetime_cols, categorical_cols = [], [], []
     for col in df.columns:
-        summarise_column(df[col], col)
+        s = df[col]
+        kind = infer_semantic_type(s)
+        if pd.api.types.is_numeric_dtype(s) and kind not in {"binary", "categorical (integer-coded)"}:
+            numerical_cols.append(col)
+        elif pd.api.types.is_datetime64_any_dtype(s):
+            datetime_cols.append(col)
+        else:
+            categorical_cols.append(col)
+
+    for label, cols in (
+        ("Numerical columns", numerical_cols),
+        ("Datetime columns", datetime_cols),
+        ("Categorical columns", categorical_cols),
+    ):
+        print(f"\n--- {label} ---")
+        for col in cols:
+            summarise_column(df[col], col)
 
     print("\n" + "=" * 100)
     print("Numeric columns, describe() side by side")
