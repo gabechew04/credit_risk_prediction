@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-DATA_PATH = Path(__file__).resolve().parent / "datasets" / "master.csv"
+DATA_PATH = Path(__file__).resolve().parent / "datasets" / "loan_status_recoded.csv"
 SAMPLE = None  # int to read only the first N rows, None for the full file
 
 # # Strings that mean "no value" but are not read as NaN by default.

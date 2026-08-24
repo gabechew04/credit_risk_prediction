@@ -57,13 +57,23 @@ from palette import (
     SURFACE,
 )
 
+CATEGORICAL_COLUMNS = [
+    "state"
+]
+NUMERICAL_COLUMNS = [
+
+]
+
 save_path = ""
 
+
 DATA_DIR = Path(__file__).resolve().parent / "datasets" 
-FIG_DIR = Path(__file__).resolve().parent / "documentation" / "master" / "figures"
+
+recoded_path = DATA_DIR / "master_grade_grouped.csv"
+FIG_DIR = Path(__file__).resolve().parent / "documentation" / "figures" / "master_grade_grouped"
 UNIVARIATE_FIG_DIR = FIG_DIR / "univariate"
-NUMERICAL_FIG_DIR = UNIVARIATE_FIG_DIR / "numerical"
-CATEGORICAL_FIG_DIR = UNIVARIATE_FIG_DIR / "categorical"
+NUMERICAL_FIG_DIR = UNIVARIATE_FIG_DIR / "class_sep_numerical"
+CATEGORICAL_FIG_DIR = UNIVARIATE_FIG_DIR / "class_sep_categorical"
 
 # Above this many bars, per-bar count/pct labels clutter more than they
 # inform; the axis carries the value instead.
@@ -126,16 +136,33 @@ def bar_chart(
         majority_class, minority_class = _binary_classes(df, target_col)
 
     totals = df[cat_col].value_counts()
+    plot_df = df.copy()
+    other_label = f"Outside Top {top_n}"
+
     if top_n is not None:
-        totals = totals.head(top_n)
+        # --- extra "outside top_n" bar: fold every category past top_n into
+        # one bucket, rather than silently dropping them from the chart. ---
+        top_categories = totals.head(top_n).index.tolist()
+        outside_top_n = ~plot_df[cat_col].isin(top_categories)
+        if outside_top_n.any():
+            plot_df.loc[outside_top_n, cat_col] = other_label
+            totals = plot_df[cat_col].value_counts()
+        # --- end "outside top_n" bar block ---
+
     # seaborn's categorical y-axis renders the first entry at the top (opposite
     # of raw matplotlib's barh), so descending here puts the largest on top.
     order = totals.sort_values(ascending=False).index.tolist()
+    if other_label in order:
+        # Always draw the "outside top_n" bar last regardless of its count,
+        # rather than letting it sort wherever its size happens to place it.
+        order.remove(other_label)
+        order.append(other_label)
+        totals = totals.loc[order]
 
     # An explicit ordered Categorical forces histplot's y-axis to use exactly
     # this category order (largest total at the top) - passing a plain
     # object-dtype column left seaborn to pick its own (mismatched) order.
-    plot_df = df[df[cat_col].isin(order)].copy()
+    plot_df = plot_df[plot_df[cat_col].isin(order)].copy()
     plot_df[cat_col] = pd.Categorical(plot_df[cat_col], categories=order, ordered=True)
 
     # Narrower bars (shrink < 1) open a visible gap between categories, and an
@@ -160,7 +187,7 @@ def bar_chart(
 
     palette = kwargs.get("palette")
     if target_col is not None and palette is not None and len(order) <= MAX_LABELLED_BARS:
-        class_counts = pd.crosstab(df[cat_col], df[target_col]).loc[order]
+        class_counts = pd.crosstab(plot_df[cat_col], plot_df[target_col]).loc[order]
 
         # Read each class's actual drawn bar geometry rather than assuming a
         # dodge order from hue_order - not part of seaborn's public contract.
@@ -205,17 +232,23 @@ def pie_chart(
     cat_col : name of the categorical column to plot, one wedge per value.
     ax : Axes to plot onto.
     top_n : keep only the `top_n` most frequent categories, folding the rest
-        into a single "Other" wedge, if given.
+        into a single "Outside Top {top_n}" wedge, if given.
     **kwargs : forwarded to `ax.pie` (e.g. `colors`, `autopct`, `startangle`).
     """
     _require_columns(df, cat_col)
     counts = df[cat_col].value_counts()
+
     if top_n is not None:
+        # --- extra "outside top_n" wedge: fold every category past top_n
+        # into one bucket, rather than silently dropping them from the pie. ---
+        other_label = f"Outside Top {top_n}"
         head = counts.head(top_n)
-        other_total = counts.iloc[top_n:].sum()
-        if other_total > 0:
-            head = pd.concat([head, pd.Series({"Other": other_total})])
+        outside_top_n_total = counts.iloc[top_n:].sum()
+        if outside_top_n_total > 0:
+            head = pd.concat([head, pd.Series({other_label: outside_top_n_total})])
         counts = head
+        # --- end "outside top_n" wedge block ---
+
     ax.pie(counts.values, **kwargs)
     ax.set_title(cat_col)
     ax.set_aspect("equal")
@@ -343,22 +376,21 @@ def boxplot_by_class(
 
 
 def main() -> None:
-    recoded_path = DATA_DIR / "master.csv"
     print(f"Reading {recoded_path} ...")
-    recoded = pd.read_csv(recoded_path, low_memory=False).drop(labels=["customer_id"], axis=1)
-    #target_col = "loan_status"
+    recoded = pd.read_csv(recoded_path, low_memory=False)
+    target_col = "grade"
 
     CATEGORICAL_FIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    #majority_class, minority_class = _binary_classes(recoded, target_col)
-    #palette = {majority_class: CATEGORICAL_PALETTE[0], minority_class: CATEGORICAL_PALETTE[1]}
+    majority_class, minority_class = _binary_classes(recoded, target_col)
+    palette = {majority_class: CATEGORICAL_PALETTE[0], minority_class: CATEGORICAL_PALETTE[1]}
 
-    for cat_col in ("emp_length", "home_ownership", "verification_status", "state", "grade"):
-        #print(f"\n`{cat_col}` x `{target_col}`:")
-        #print(pd.crosstab(recoded[cat_col], recoded[target_col]).to_string())
+    for cat_col in CATEGORICAL_COLUMNS:
+        print(f"\n`{cat_col}` x `{target_col}`:")
+        print(pd.crosstab(recoded[cat_col], recoded[target_col]).to_string())
 
-        fig, ax = plt.subplots(figsize=(8, 6))
-        bar_chart(recoded, cat_col, ax=ax, top_n=7)
+        # fig, ax = plt.subplots(figsize=(8, 6))
+        # bar_chart(recoded, cat_col, ax=ax, top_n=7, target_col=target_col)
         # ax.legend(
         #     handles=[
         #         plt.Rectangle((0, 0), 1, 1, color=palette[majority_class]),
@@ -367,19 +399,19 @@ def main() -> None:
         #     labels=[f"{majority_class} (majority)", f"{minority_class} (minority)"],
         #     loc="lower right",
         # )
-        bar_path = CATEGORICAL_FIG_DIR / f"{cat_col}_bar_chart.png"
-        fig.savefig(bar_path, dpi=150, bbox_inches="tight")
-        plt.show()
-        plt.close(fig)
-        print(f"Wrote {bar_path}")
+        # bar_path = CATEGORICAL_FIG_DIR / f"{cat_col}_bar_chart.png"
+        # fig.savefig(bar_path, dpi=150, bbox_inches="tight")
+        # plt.show()
+        # plt.close(fig)
+        # print(f"Wrote {bar_path}")
 
-        pie_fig, pie_ax = plt.subplots(1, 1, figsize=(14, 7))
-        # for pie_ax, cls in zip(pie_axes, (majority_class, minority_class)):
-        #     class_df = recoded[recoded[target_col] == cls]
-        #     pie_chart(class_df, cat_col, ax=pie_ax, autopct=lambda p: f"{p:.1f}%" if p >= 3 else "")
-        #     #pie_ax.set_title(f"{target_col} = {cls}")
+        pie_fig, pie_axes = plt.subplots(1, 2, figsize=(14, 7))
+        for pie_ax, cls in zip(pie_axes, (majority_class, minority_class)):
+            class_df = recoded[recoded[target_col] == cls]
+            pie_chart(class_df, cat_col, ax=pie_ax, autopct=lambda p: f"{p:.1f}%" if p >= 3 else "", top_n=7)
+            pie_ax.set_title(f"{target_col} = {cls}")
 
-        pie_chart(recoded, cat_col, ax=pie_ax, autopct=lambda p: f"{p:.1f}%" if p >= 3 else "", top_n=7)
+        #pie_chart(recoded, cat_col, ax=pie_ax, autopct=lambda p: f"{p:.1f}%" if p >= 3 else "", top_n=7)
         pie_ax.legend(
             pie_ax.patches, recoded[cat_col].value_counts().index,
             loc="center left", bbox_to_anchor=(1.0, 0.5),

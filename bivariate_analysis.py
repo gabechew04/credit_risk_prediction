@@ -23,53 +23,107 @@ def numerical_and_numerical_scatter(
     df: pd.DataFrame,
     num_col1: str,
     num_col2: str,
-    target: str,
     ax: plt.Axes,
+    target: str | None = None,
     **kwargs
 ) -> None:
 
+    if target is not None:
+        sns.scatterplot(data=df, x=num_col1, y=num_col2, hue=target, ax=ax, **kwargs)
+    else:
+        sns.scatterplot(data=df, x=num_col1, y=num_col2, ax=ax, **kwargs)
 
-    sns.scatterplot(data = df, x = num_col1, y = num_col2, hue = target, ax=ax, **kwargs)
-    ax.set_title(f"Scatterplot of {num_col1} against {num_col2}, grouped by {target}")
+    # --- axis and title annotations ---
+    if target is not None:
+        ax.set_title(f"Scatterplot of {num_col1} against {num_col2}, grouped by {target}")
+    else:
+        ax.set_title(f"Scatterplot of {num_col1} against {num_col2}")
     ax.set_xlabel(num_col1)
     ax.set_ylabel(num_col2)
+    # --- end axis and title annotations ---
+
     ax.tick_params(axis="x", rotation=45)
     plt.tight_layout()
+
+    # Legend is only meaningful when the plot is hue-split by target.
+    if target is not None:
+        ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
 
 
 def categorical_and_numerical_scatter(
     df: pd.DataFrame,
     cat_col: str,
     num_col: str,
-    target: str,
     ax: plt.Axes,
+    target: str | None = None,
+    top_n: int | None = None,
     **kwargs
 ) -> None:
 
+    plot_df = df
 
-    sns.stripplot(data=df, x=cat_col, y=num_col, hue=target, ax=ax, **kwargs)
-    ax.set_title(f"Scatterplot of {cat_col} against {num_col}, grouped by {target}")
+    if top_n is not None:
+        # --- extra "outside top_n" stripplot column: fold every category
+        # past top_n into one bucket, rather than silently dropping them. ---
+        other_label = f"Outside Top {top_n}"
+        top_categories = df[cat_col].value_counts().head(top_n).index.tolist()
+        outside_top_n = ~df[cat_col].isin(top_categories)
+        if outside_top_n.any():
+            plot_df = df.copy()
+            plot_df.loc[outside_top_n, cat_col] = other_label
+        # --- end "outside top_n" stripplot column block ---
+
+    if target is not None:
+        sns.stripplot(data=plot_df, x=cat_col, y=num_col, hue=target, ax=ax, **kwargs)
+    else:
+        sns.stripplot(data=plot_df, x=cat_col, y=num_col, ax=ax, **kwargs)
+
+    # --- axis and title annotations ---
+    if target is not None:
+        ax.set_title(f"Scatterplot of {cat_col} against {num_col}, grouped by {target}")
+    else:
+        ax.set_title(f"Scatterplot of {cat_col} against {num_col}")
     ax.set_xlabel(cat_col)
     ax.set_ylabel(num_col)
+    # --- end axis and title annotations ---
+
     ax.tick_params(axis="x", rotation=90)
     plt.tight_layout()
+
+    # Legend is only meaningful when the plot is hue-split by target.
+    if target is not None:
+        ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
 
 
 def categorical_and_numerical_boxplot(
     df: pd.DataFrame,
     cat_col: str,
     num_col: str,
-    target: str,
     ax: plt.Axes,
+    target: str | None = None,
     **kwargs
 ) -> None:
 
-    sns.boxplot(data=df, x=cat_col, y=num_col, hue=target, ax=ax, **kwargs)
-    ax.set_title(f"Boxplot of {num_col} by {cat_col}, grouped by {target}")
+    if target is not None:
+        sns.boxplot(data=df, x=cat_col, y=num_col, hue=target, ax=ax, **kwargs)
+    else:
+        sns.boxplot(data=df, x=cat_col, y=num_col, ax=ax, **kwargs)
+
+    # --- axis and title annotations ---
+    if target is not None:
+        ax.set_title(f"Boxplot of {num_col} by {cat_col}, grouped by {target}")
+    else:
+        ax.set_title(f"Boxplot of {num_col} by {cat_col}")
     ax.set_xlabel(cat_col)
     ax.set_ylabel(num_col)
+    # --- end axis and title annotations ---
+
     ax.tick_params(axis="x", rotation=90)
     plt.tight_layout()
+
+    # Legend is only meaningful when the plot is hue-split by target.
+    if target is not None:
+        ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
 
 # def categorical_and_categorical_scatter(
 #     df: pd.DataFrame,
@@ -86,19 +140,29 @@ def categorical_and_categorical_box(
     df: pd.DataFrame,
     cat_col1: str,
     cat_col2: str,
-    target: str,
     ax: plt.Axes,
+    target: str | None = None,
     **kwargs
-    
 ) -> None:
 
-    rate_table = pd.crosstab(
-        df[cat_col1], df[cat_col2], values=df[target] == "Missed Payment", aggfunc="mean",
-    )
-    sns.heatmap(rate_table, annot=True, fmt=".0%", ax=ax, **kwargs)
-    ax.set_title(f"{"Missed Payment"} rate by {cat_col1} and {cat_col2}")
+    if target is not None:
+        rate_table = pd.crosstab(
+            df[cat_col1], df[cat_col2], values=df[target] == "Missed Payment", aggfunc="mean",
+        )
+        sns.heatmap(rate_table, annot=True, fmt=".0%", ax=ax, **kwargs)
+    else:
+        count_table = pd.crosstab(df[cat_col1], df[cat_col2])
+        sns.heatmap(count_table, annot=True, fmt="d", ax=ax, **kwargs)
+
+    # --- axis and title annotations ---
+    if target is not None:
+        ax.set_title(f"Missed Payment rate by {cat_col1} and {cat_col2}")
+    else:
+        ax.set_title(f"Count of {cat_col1} by {cat_col2}")
     ax.set_xlabel(cat_col2)
     ax.set_ylabel(cat_col1)
+    # --- end axis and title annotations ---
+
     ax.tick_params(axis="x", rotation=90)
     plt.tight_layout()
 
@@ -140,7 +204,6 @@ def main() -> None:
     #         df, num_col1, num_col2, target="loan_status", ax=ax,
     #         palette=palette, alpha=0.8, s=15, edgecolor="none",
     #     )
-    #     ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
     #     save_path = NUM_VS_NUM_DIR / f"{num_col1}_vs_{num_col2}_scatter.png"
     #     fig.savefig(save_path, dpi=150, bbox_inches="tight")
     #     plt.close(fig)
@@ -153,7 +216,6 @@ def main() -> None:
     #             df, cat_col, num_col, target="loan_status", ax=ax,
     #             palette=palette, alpha=0.8, size=3, edgecolor="none",
     #         )
-    #         ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
     #         save_path = NUM_VS_CAT_SCAT_DIR / f"{cat_col}_vs_{num_col}_scatter.png"
     #         fig.savefig(save_path, dpi=150, bbox_inches="tight")
     #         plt.close(fig)
@@ -166,7 +228,6 @@ def main() -> None:
     #             df, cat_col, num_col, target="loan_status", ax=ax,
     #             palette=palette,
     #         )
-    #         ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
     #         save_path = NUM_VS_CAT_BOX_DIR / f"{cat_col}_vs_{num_col}_boxplot.png"
     #         fig.savefig(save_path, dpi=150, bbox_inches="tight")
     #         plt.close(fig)

@@ -59,3 +59,6 @@ There are no automated tests; validate changes by running the relevant script an
   - `bar_chart`'s per-bar count labels only render when a `palette` kwarg is supplied *and* the category count is within `MAX_LABELLED_BARS` (15), since the label logic matches drawn bars back to classes by facecolor.
 - **Heatmap cmaps are deliberately left unset**: `categorical_and_categorical_box`/`categorical_and_categorical_count` in `bivariate_analysis.py` and `correlation_heatmap` in `correlations.py` never pass an explicit `cmap` to `sns.heatmap`, so all three render with seaborn's default heatmap colormap — keeping every heatmap in the project visually consistent. Don't hardcode a `cmap` on a new heatmap unless deliberately changing this project-wide.
 - **`documentation/main.tex`** uses `\include{macros}` for a shared preamble (`macros.tex`, shared with sibling projects in this workspace) — don't duplicate package imports or custom commands already defined there. Build artifacts (`.aux`, `.log`, `.fdb_latexmk`, `.fls`, `.out`) are not committed; `main.pdf` is kept as the built output.
+
+## Standing Assumptions
+- In `customer.csv`, `addr_state, zip_code, emp_title` are free of further missing values beyond the ones already identified.

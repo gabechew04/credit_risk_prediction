@@ -16,45 +16,93 @@ For this project, we make use of the BigQuery Fintech Dataset that is publicly a
 \subsection{\texttt{loans.csv} Dataset}
 The dataset consists of 270299 rows and 18 columns occupying space of 172MB. A following is the list of the columns together with their datatypes:
 
-\begin{table}[h]
-    \centering
-    \begin{tabular}{c|c}
-        \textbf{Column} & \textbf{dtype} \\
-         \hline
-        \texttt{loan\_id} & \texttt{int64} \\
-        \texttt{customer\_id} & \texttt{str} \\
-        \texttt{loan\_status} & \texttt{str} \\
-        \texttt{loan\_amount} & \texttt{float64} \\
-        \texttt{state} & \texttt{str} \\
-        \texttt{funded\_amount} & \texttt{float64} \\
-        \texttt{term} & \texttt{str} \\
-        \texttt{int\_rate} & \texttt{float64} \\
-        \texttt{installment} & \texttt{float64} \\
-        \texttt{grade} & \texttt{str} \\
-        \texttt{issue\_d} & \texttt{datetime64[us]}$^\dagger$ \\
-        \texttt{issue\_date} & \texttt{datetime64[us]}$^\dagger$ \\
-        \texttt{issue\_year} & \texttt{float64} \\
-        \texttt{pymnt\_plan} & \texttt{bool} \\
-        \texttt{type} & \texttt{str} \\
-        \texttt{purpose} & \texttt{str} \\
-        \texttt{description} & \texttt{str} \\
-        \texttt{notes} & \texttt{str} \\
-        \hline
-    \end{tabular}
-    \caption{Column analysis of \texttt{loans.csv}. Dtypes are those inferred by
+\begin{columnsummary}{Column analysis of \texttt{loans.csv}. Dtypes are those inferred by
     \texttt{pandas.read\_csv} (pandas 3.0.3, in which text columns take the
     dedicated \texttt{str} dtype). $^\dagger$\texttt{issue\_d} and
     \texttt{issue\_date} are stored as text (\texttt{Jun-13} and \texttt{June
     2013} respectively) and are read as \texttt{str}; the dtype shown is the
     result of parsing them with \texttt{pandas.to\_datetime}.}
-\end{table}
+    \colentry{loan\_id}{Identifier}{A digit from 1 to 270299 that represents the unique identifier for the loan.}
+    \colentry{customer\_id}{Identifier}{A unique string identifier that identifies a customer.}
+    \colentry{loan\_status}{Categorical}{Consists of 7 unique categories: Current, Fully Paid, Charged Off, Late (31-120 days), In Grace Period, Late (16-30 days), Default.}
+    \colentry{loan\_amount}{Numerical}{The principal amount loaned.}
+    \colentry{state}{Categorical}{The resident US state of the borrower, corresponding to all 51 US states.}
+    \colentry{funded\_amount}{Numerical}{The principal amount loaned.}
+    \colentry{term}{Categorical (Binary)}{The term taken to pay off the loan. A binary column of either 36 or 60 months.}
+    \colentry{int\_rate}{Numerical}{Interest rate charged on the loan.}
+    \colentry{installment}{Numerical}{The amount of installment paid per month in the term.}
+    \colentry{grade}{Categorical}{Investment grade of the loan ranging from A-G.}
+    \colentry{issue\_d}{Date}{The issue date of the loan.}
+    \colentry{issue\_date}{Date}{The issue date of the loan.}
+    \colentry{issue\_year}{Categorical}{The issue year of the loan, ranging from all years between 2012 and 2019 inclusive.}
+    \colentry{pymnt\_plan}{Boolean}{Unsure. This however was a boolean column.}
+    \colentry{type}{Categorical}{The financing method of the loan. Consists of values like `Individual', `Joint' and `DIRECT\_PAY'.}
+    \colentry{purpose}{Categorical}{The reason for obtaining the loan.}
+    \colentry{description}{Categorical}{The reason for obtaining the loan.}
+    \colentry{notes}{Degenerate}{Consisted of the values `desc' only.}
+\end{columnsummary}
 
-The dataframe was free of missing values including placeholders for all columns except \texttt{description}. Upon inspection of the columns, it is noted that the following pairs of columns are duplicated:
-\texttt{loan\_amount, founded\_amount} for the principal amount, \texttt{issue\_date, issue\_d} for the date of issue, \texttt{purpose, description} for the purpose of loan. Furthermore, the \texttt{pymnt\_plan} nearly constant and consisting of $99.99\%$ of \texttt{False} variables. 
+\subsubsection*{Missing Values}
+The dataframe was free of missing values including placeholders for all columns except \texttt{description}. 
+
+\subsubsection*{Duplicate Columns}
+Upon inspection of the columns, it is noted that the following pairs of columns are duplicated:
+\texttt{loan\_amount, founded\_amount} for the principal amount, \texttt{issue\_date, issue\_d} for the date of issue, \texttt{purpose, description} for the purpose of loan. 
+
+\subsubsection*{Constant Columns}
+Furthermore, the \texttt{pymnt\_plan} nearly constant and consisting of $99.99\%$ of \texttt{False} variables. 
 
 There were also type issues noted in the \texttt{type} column, entries like `individual' and `INDIVIDUAL' counted as unique entries in pandas and were subsequently merged into single entries. 
 
 To handle all the data quality issues identified, a new dataset called `loan\_cleaned.csv' was created by dropping the duplicate columns $(\texttt{funded\_amount}, \texttt{issue\_d}, \texttt{description})$, the non-varying columns (\texttt{notes}, \texttt{pymnt\_plan}) and the identifier columns (\texttt{loan\_id, customer\_id}).\footnote{This step will be reversed in the future to allow for joining with the other dataset \texttt{customer.csv}.}, and fixing the entry inconsistencies seen in the \texttt{type} column. 
+
+The final selected columns together with their data category types are given:
+
+\begin{table}
+    \centering
+    \begin{tabular}{c|c}
+        \textbf{Column} & \textbf{Column Data Type} \\
+         \hline
+        \texttt{loan\_status} & numerical \\
+        \texttt{loan\_amount} & numerical \\
+        \texttt{state} & categorical \\
+        \texttt{term} & categorical (binary) \\
+        \texttt{int\_rate} & numerical \\
+        \texttt{installment} & numerical \\
+        \texttt{grade} & categorical \\
+        \texttt{issue\_d} & date \\
+        \texttt{type} & categorical \\
+        \texttt{purpose} & categorical \\
+    \end{tabular}
+\end{table}
+
+\subsection{\texttt{customer.csv} dataset}
+The \texttt{customer.csv} dataset contains more personal information on the customers within the dataset. The dataset has 270299 rows and 11 columns occupying space of 132.4MB. A following is the list of the columns together with their datatypes:
+
+\begin{columnsummary}{Column analysis of \texttt{customer.csv}. Dtypes and inferred semantic types are those produced by \texttt{loan\_column\_analysis.infer\_semantic\_type()}.}
+    \colentry{customer\_id}{Identifier}{A unique, hashed byte-string identifier for a customer (270299 unique values, one per row) - the intended join key with \texttt{loan.csv}.}
+    \colentry{emp\_title}{Categorical (high-cardinality)}{Free-text job title of the borrower. 88932 unique values; 8.75\% missing.}
+    \colentry{emp\_length}{Categorical}{Length of employment, e.g. `1 year', `10+ years'. 11 unique values; 6.93\% missing.}
+    \colentry{home\_ownership}{Categorical}{Housing status of the borrower: RENT, MORTGAGE, OWN, ANY, OTHER, or NONE.}
+    \colentry{annual\_inc}{Numerical}{Self-reported annual income of the borrower.}
+    \colentry{annual\_inc\_joint}{Numerical}{Self-reported joint annual income, only present for joint applications; 93.05\% missing.}
+    \colentry{verification\_status}{Categorical}{Whether income was verified: Verified, Source Verified, or Not Verified.}
+    \colentry{zip\_code}{Categorical}{The first three digits of the borrower's zip code, e.g. `010xx'. 887 unique values.}
+    \colentry{addr\_state}{Categorical}{The resident US state of the borrower, corresponding to all 51 US states.}
+    \colentry{avg\_cur\_bal}{Numerical}{Average current balance across the borrower's open credit lines.}
+    \colentry{Tot\_cur\_bal}{Numerical}{Total current balance across all of the borrower's credit lines.}
+\end{columnsummary}
+
+\textbf{Missing Values.} The following columns possessed missing values:
+\begin{enumerate}
+    \item \texttt{annual\_inc\_joint}. 93.05\% missing values.
+    \item \texttt{emp\_title}. 8.75\% missing values.
+    \item \texttt{emp\_length}. 6.93\% missing values. 
+\end{enumerate}
+It is might be a point to recheck the addr\_state, zip\_code, and emp\_title columns for further missing values, because the column categories were very dense and quirky values such as `n/a' in string format could be indicators of missing information that will be useful. But for now we proceed with 
+\begin{assumption} \label{assump}
+\texttt{addr\_state, zip\_code, and emp\_title} are all free of missing values.
+\end{assumption}
 
 
 
