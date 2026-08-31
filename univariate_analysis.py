@@ -100,7 +100,28 @@ def _binary_classes(df: pd.DataFrame, target_col: str) -> tuple:
         )
     return class_counts.index[0], class_counts.index[1]  # value_counts sorts descending
 
-    
+
+def _fold_outside_top_n(df: pd.DataFrame, cat_col: str, top_n: int) -> tuple[pd.DataFrame, str]:
+    """Fold every `cat_col` category outside the `top_n` most frequent into
+    one "Outside Top {top_n}" bucket, rather than silently dropping them.
+
+    Returns a copy of `df` with `cat_col` relabelled, and the bucket's label.
+    The whole column is stringified (not just the relabelled rows) - a mix
+    of numbers and one string category (e.g. int year labels plus
+    "Outside Top N") makes seaborn/matplotlib's categorical axis converter
+    raise a ConversionError, since it can't decide whether the axis is
+    numeric or categorical.
+    """
+    other_label = f"Outside Top {top_n}"
+    top_categories = df[cat_col].value_counts().head(top_n).index.tolist()
+    outside_top_n = ~df[cat_col].isin(top_categories)
+
+    plot_df = df.copy()
+    if outside_top_n.any():
+        plot_df[cat_col] = plot_df[cat_col].astype(str)
+        plot_df.loc[outside_top_n, cat_col] = other_label
+    return plot_df, other_label
+
 
 def bar_chart(
     df: pd.DataFrame,
@@ -135,19 +156,12 @@ def bar_chart(
         _require_columns(df, target_col)
         majority_class, minority_class = _binary_classes(df, target_col)
 
-    totals = df[cat_col].value_counts()
-    plot_df = df.copy()
-    other_label = f"Outside Top {top_n}"
-
     if top_n is not None:
-        # --- extra "outside top_n" bar: fold every category past top_n into
-        # one bucket, rather than silently dropping them from the chart. ---
-        top_categories = totals.head(top_n).index.tolist()
-        outside_top_n = ~plot_df[cat_col].isin(top_categories)
-        if outside_top_n.any():
-            plot_df.loc[outside_top_n, cat_col] = other_label
-            totals = plot_df[cat_col].value_counts()
-        # --- end "outside top_n" bar block ---
+        plot_df, other_label = _fold_outside_top_n(df, cat_col, top_n)
+    else:
+        plot_df, other_label = df, None
+
+    totals = plot_df[cat_col].value_counts()
 
     # seaborn's categorical y-axis renders the first entry at the top (opposite
     # of raw matplotlib's barh), so descending here puts the largest on top.
@@ -245,13 +259,30 @@ def pie_chart(
         head = counts.head(top_n)
         outside_top_n_total = counts.iloc[top_n:].sum()
         if outside_top_n_total > 0:
+            # Cast the index to object first - if cat_col is numeric dtype,
+            # concatenating a numeric index with the "Outside Top N" string
+            # key still works (pandas upcasts to object), but casting
+            # explicitly here keeps the behavior consistent with bar_chart
+            # and avoids relying on that implicit upcast.
+            head.index = head.index.astype(object)
             head = pd.concat([head, pd.Series({other_label: outside_top_n_total})])
         counts = head
         # --- end "outside top_n" wedge block ---
 
+    kwargs.setdefault("autopct", lambda p: f"{p:.1f}%" if p >= 3 else "")
+
     ax.pie(counts.values, **kwargs)
     ax.set_title(cat_col)
     ax.set_aspect("equal")
+
+    # Legend plotting - use `counts` (the post-top_n-fold series actually
+    # passed to ax.pie) rather than re-deriving from `df`, so the legend
+    # labels line up with the wedges actually drawn (including the folded
+    # "Outside Top N" bucket, if present).
+    ax.legend(
+        ax.patches, counts.index,
+        loc="center left", bbox_to_anchor=(1.0, 0.5),
+    )
 
 
 def _skew_kurt_label(series: pd.Series) -> str:
@@ -412,10 +443,7 @@ def main() -> None:
             pie_ax.set_title(f"{target_col} = {cls}")
 
         #pie_chart(recoded, cat_col, ax=pie_ax, autopct=lambda p: f"{p:.1f}%" if p >= 3 else "", top_n=7)
-        pie_ax.legend(
-            pie_ax.patches, recoded[cat_col].value_counts().index,
-            loc="center left", bbox_to_anchor=(1.0, 0.5),
-        )
+        
         pie_path = CATEGORICAL_FIG_DIR / f"{cat_col}_pie_chart.png"
         pie_fig.savefig(pie_path, dpi=150, bbox_inches="tight")
         plt.show()
