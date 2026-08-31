@@ -25,6 +25,10 @@ Without activating, call the environment's interpreter directly (no `python`/`co
 ~/anaconda3/envs/data_science/python.exe credit_risk/loan_column_analysis.py
 ```
 
+## Reading Jupyter Notebooks
+When reading notebooks, there is no need to check the json output, simply read the notebook. 
+
+
 Every script's `main()` calls seaborn/matplotlib plotting functions that end with `plt.show()`, which blocks on an interactive window until it's closed — expect to close each window in turn when running a script that produces multiple figures.
 
 - `loan_column_analysis.py` — full column-level EDA of a CSV (`DATA_PATH`, currently `datasets/customer.csv`): inferred semantic type per column (identifier/categorical/numeric/datetime/constant/binary, beyond raw dtype, via `infer_semantic_type()`), a missing-value breakdown (`missing_table()`), and a per-column summary. The per-column summary buckets columns by inferred type first, then dispatches each to a type-specific summariser: `summarise_numerical_column()` (describe + skew/kurtosis), `summarise_datetime_column()` (describe + by-year counts), `summarise_categorical_column()` (value counts, keeping `NaN` as its own category via `dropna=False`).
@@ -48,6 +52,7 @@ There are no automated tests; validate changes by running the relevant script an
 
 - **Constants over CLI args**: scripts favor module-level constants (`DATA_PATH`, `SOURCE_PATH`, `OUTPUT_PATH`, `SAMPLE`) at the top of the file over `argparse` — follow this pattern rather than introducing CLI parsing. To point a script at a different file or row-capped sample, edit the constant, don't add a flag.
 - **Single-responsibility functions**: favor several small, single-purpose functions (e.g. `summarise_numerical_column`/`summarise_categorical_column`/`summarise_datetime_column`, or a plotting function that only plots vs. `main()` that owns figure creation/`show`/`savefig`) over one function handling multiple concerns — makes each piece independently checkable.
+- **Multiple Responsibility Functions**: Most common for plotting functions e.g. plotting axes and deriving top 15. Make sure clear separation of code blocks for different responsibilities, and the blocks are clearly commented.
 - **Optional-argument branching**: when a parameter (e.g. `target_col: str | None = None`) toggles behavior, don't gate the whole function body behind one `if target_col is not None:` at the top. Branch locally, at each spot the two cases actually differ (e.g. `bar_chart`/`histogram_by_class`/`boxplot_by_class` each branch separately at the plotting call, the title string, and the count-label step) and let the rest of the function run unconditionally. This keeps the shared logic shared instead of duplicated inside one large conditional block.
 - **Column dtype inference**: raw pandas dtypes are misleading on this dataset (e.g. `loan_id` is `int64` but is really an identifier, `issue_year` is `float64` but is really a small integer-coded category). `loan_column_analysis.infer_semantic_type()` is the canonical place this logic lives — reuse it rather than re-deriving ad hoc type checks in new scripts.
 - **Known data-quality issues in `loan.csv`** (documented in `documentation/main.tex`): `loan_amount`/`funded_amount` are identical on every row; `issue_d`/`issue_date` are the same date in two formats; `purpose`/`description` are the same field, but `description` has dirty casing/spacing (5,631 spurious levels vs. `purpose`'s clean 13); `pymnt_plan` is 99.99% `False`; `type` has a casing split (`Individual` vs `INDIVIDUAL`, `Joint App` vs `JOINT`). `clean_loan_dataset.py` is the fix for all of these except join-key columns, which are intentionally kept in the raw file.

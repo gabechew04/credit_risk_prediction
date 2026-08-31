@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-DATA_PATH = Path(__file__).resolve().parent / "datasets" / "loan_status_recoded.csv"
+DATA_PATH = Path(__file__).resolve().parent / "home_credit" / "bureau.csv"
 SAMPLE = None  # int to read only the first N rows, None for the full file
 
 # # Strings that mean "no value" but are not read as NaN by default.
@@ -238,3 +238,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
